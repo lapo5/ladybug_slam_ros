@@ -29,6 +29,7 @@
 #include <include/ROSPublisher.h>
 
 #include <boost/thread/thread.hpp>
+#include <opencv2/core/eigen.hpp>
 
 using namespace std;
 using namespace cv;
@@ -60,6 +61,10 @@ class SLAM_Monitor
   
   Ladybug_SLAM::System* SLAM;
   ROSPublisher* octmap_publisher;
+
+  tf::TransformBroadcaster broadcaster;
+  tf::Transform change_frame;
+  tf::Quaternion frame_rotation;
 
 public:
   SLAM_Monitor(Ladybug_SLAM::System* slam_ptr, ROSPublisher* octmap_publisher_ptr)
@@ -98,8 +103,22 @@ public:
     cv_ptr4 = cv_bridge::toCvCopy(msg.img4, sensor_msgs::image_encodings::RGB8);
     images[4]=cv_ptr4->image;
 
-    SLAM->TrackPanobyFishEye(msg.ImgStringName, images, msg.tframe);
+    cv::Mat Pos = SLAM->TrackPanobyFishEye(msg.ImgStringName, images, msg.tframe);
     octmap_publisher->Update(SLAM->GetTracking());
+
+    if(Pos.cols == 4 && Pos.rows == 4){
+
+        change_frame.setOrigin(tf::Vector3(Pos.at<double>(0, 3), Pos.at<double>(1, 3), Pos.at<double>(2, 3)));
+
+        Eigen::Matrix<float, 3, 3> eigen_mat;
+        cv::Mat Rot = Pos.rowRange(0,3).colRange(0,3).clone();
+        cv::cv2eigen(Rot, eigen_mat);
+        Eigen::Vector3f ea = eigen_mat.eulerAngles(2, 1, 0);
+
+        frame_rotation.setRPY(ea.x(), ea.y(), ea.z()); 
+        change_frame.setRotation(frame_rotation);
+        broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/odom", "/ladybug_slam/camera"));
+    }
   }
 };
 
@@ -130,6 +149,16 @@ int main(int argc, char **argv)
   Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, ORB_FEATURE_MATCHER, false);
 
   SLAM.Start();
+
+	tf::TransformBroadcaster broadcaster;
+
+	tf::Transform change_frame;
+	change_frame.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+
+	tf::Quaternion frame_rotation;
+	frame_rotation.setRPY(0, 0, 0); 
+	change_frame.setRotation(frame_rotation);
+  broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/odom", "/ladybug_slam/camera"));
 
   octmap_publisher = new ROSPublisher(SLAM.GetMap(), &SLAM, frequency_octmap,  n);
 

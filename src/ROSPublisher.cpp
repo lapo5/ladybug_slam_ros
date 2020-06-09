@@ -152,7 +152,7 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<std::string>("/ladybug_slam/frame/camera_frame",       camera_frame_,       ROSPublisher::DEFAULT_CAMERA_FRAME);
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
 
-  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        true);
+  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  true);
   nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
@@ -1092,10 +1092,12 @@ void ROSPublisher::Run()
      * created just before start of the correction procedure
      */
     if (octomap_enabled_) {
-      octomap_worker_thread_ = std::thread( [this] { octomapWorker(); } );
       ROS_WARN("octomap_worker_thread_ started...");
+      octomap_worker_thread_ = std::thread( [this] { octomapWorker(); } );
     }
+
     info_updater_thread_ = std::thread( [this] { camInfoUpdater(); } );
+    ROS_WARN("info_updater_thread_ started...");
 
     SetFinish(false);
     while (WaitCycleStart()) {
@@ -1121,8 +1123,7 @@ void ROSPublisher::Run()
 
 bool ROSPublisher::WaitCycleStart()
 {
-    cout << "IPublisherThread::WaitCycleStart(): " << IPublisherThread::WaitCycleStart() << endl;
-    if (!IPublisherThread::WaitCycleStart())
+    if (GetSystem()->isFinished())
         return false;
     pub_rate_.sleep();
     return true;
