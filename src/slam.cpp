@@ -52,8 +52,6 @@ string yaml_path = "/home/marco/Desktop/Ladybug_SLAM_ws/src/ladybug_slam_lib/Lad
 
 static double frequency_octmap = 1.0;
 
-ROSPublisher* octmap_publisher;
-
 class SLAM_Monitor
 {
   ros::NodeHandle nh_;
@@ -71,7 +69,6 @@ public:
   {
     // Subscrive to input video feed and publish output video feed
     image_sub_ = nh_.subscribe("/pano_image", 10, &SLAM_Monitor::backCB, this);
-    cv::namedWindow(OPENCV_WINDOW);
 
     SLAM = slam_ptr;
     octmap_publisher = octmap_publisher_ptr;
@@ -80,7 +77,6 @@ public:
   void backCB(const ladybug_msgs::PanoImage& msg)
   {
 
-    ROS_INFO_STREAM("RECEIVED IMAGES");
     vector<cv::Mat> images(5);
     
     cv_bridge::CvImagePtr cv_ptr0;
@@ -108,6 +104,7 @@ public:
 
     if(Pos.cols == 4 && Pos.rows == 4){
 
+/*
         change_frame.setOrigin(tf::Vector3(Pos.at<double>(0, 3), Pos.at<double>(1, 3), Pos.at<double>(2, 3)));
 
         Eigen::Matrix<float, 3, 3> eigen_mat;
@@ -117,15 +114,19 @@ public:
 
         frame_rotation.setRPY(ea.x(), ea.y(), ea.z()); 
         change_frame.setRotation(frame_rotation);
-        broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/odom", "/ladybug_slam/camera"));
+        broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "ladybug_slam/camera", "ladybug_slam/odom"));
+        ROS_WARN("Setting new pos of the camera");
+        */
+
+        octmap_publisher->SetCurrentCameraPose(Pos);
     }
   }
 };
 
-void do_stuff()
+void octomap_thread(ROSPublisher* octmap_publisher)
 {
   ros::NodeHandlePtr node = boost::make_shared<ros::NodeHandle>();
-
+  ROS_WARN("Octomap thread start");
   octmap_publisher->Run();
 }
 
@@ -158,20 +159,20 @@ int main(int argc, char **argv)
 	tf::Quaternion frame_rotation;
 	frame_rotation.setRPY(0, 0, 0); 
 	change_frame.setRotation(frame_rotation);
-  broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/odom", "/ladybug_slam/camera"));
+  broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/world_frame", "/ladybug_slam/camera"));
 
-  octmap_publisher = new ROSPublisher(SLAM.GetMap(), &SLAM, frequency_octmap,  n);
+  ROSPublisher octmap_publisher(SLAM.GetMap(), &SLAM, frequency_octmap,  n);
 
-  SLAM_Monitor slam_monitor(&SLAM, octmap_publisher);
+  SLAM_Monitor slam_monitor(&SLAM, &octmap_publisher);
 
   // spawn another thread
-  boost::thread thread_b(do_stuff);
+  boost::thread thread_b(octomap_thread, &octmap_publisher);
   
   ros::MultiThreadedSpinner spinner(4); // Use 4 threads
   spinner.spin(); // spin() will not return until the node has been shutdown
 
   cout << endl << endl << "Finished" << endl;
-  SLAM.Shutdown();
+  SLAM.Shutdown(true);
 
   // wait the second thread to finish
   thread_b.join();

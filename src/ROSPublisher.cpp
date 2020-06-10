@@ -39,7 +39,7 @@ using namespace Ladybug_SLAM;
 
 ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::NodeHandle nh) :
     IMapPublisher(map),
-    drawer_(GetMap()),
+    drawer_(system->GetFrameDrawer()),
     nh_(std::move(nh)),
     pub_rate_(frequency),
     lastBigMapChange_(-1),
@@ -75,7 +75,6 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
     trajectory_pub_  = nh_.advertise<nav_msgs::Path>("cam_path", 2);
 
     // initialize subscribers
-    mode_sub_       = nh_.subscribe("switch_mode",    1, &ROSPublisher::localizationModeCallback,   this);
     clear_path_sub_ = nh_.subscribe("clear_cam_path", 1, &ROSPublisher::clearCamTrajectoryCallback, this);
 
     if (octomap_enabled_)
@@ -151,10 +150,11 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<std::string>("/ladybug_slam/frame/map_frame_adjusted", map_frame_adjusted_, "/ladybug_slam/odom");
   nh.param<std::string>("/ladybug_slam/frame/camera_frame",       camera_frame_,       ROSPublisher::DEFAULT_CAMERA_FRAME);
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
+  nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,         "/ladybug_slam/world_frame");
 
   nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
-  nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  true);
+  nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  false);
   nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
 
   nh.param<bool>("/ladybug_slam/octomap/rebuild",  octomap_rebuild_, false);
@@ -192,6 +192,7 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   std::cout << "- map_frame_adjusted:  " << map_frame_adjusted_ << std::endl;
   std::cout << "- camera_frame:  " << camera_frame_ << std::endl;
   std::cout << "- base_frame:  " << base_frame_ << std::endl;
+  std::cout << "- world_frame:  " << world_frame_ << std::endl;
   std::cout << "OCTOMAP" << endl;
   std::cout << "- octomap/enabled:  " << octomap_enabled_ << std::endl;
   std::cout << "- octomap/publish_octomap:  " << publish_octomap_ << std::endl;
@@ -684,6 +685,7 @@ void ROSPublisher::publishMap()
                                                                      camera_height_corrected_);
     msg.header.frame_id = map_frame_;
     map_pub_.publish(msg);
+    ROS_INFO("publishMap()");
 }
 
 /*
@@ -713,31 +715,7 @@ void ROSPublisher::publishCameraPose()
     cv::Mat xf = PublisherUtils::computeCameraTransform(GetCameraPose(), map_scale_);
 
     if (!xf.empty()) {
-
-      /*
-       * DESCRIPTION:
-       * Map to camera transform is corrected pose of robot
-       * in the world frame.
-       * Therefore there is need to look for odom->camera transform
-       * or just base_link->camera.
-       * It will create correction in odometry coordinate system
-       * to align it with real world frame.
-       *
-       */
       try {
-
-          std::string source_frame;
-          tf::StampedTransform tf_target;
-          source_frame = map_frame_adjusted_;
-          /* TODO: add as a parameter
-          if ( adjust_map_frame_ ) {
-            source_frame = map_frame_adjusted_; // interface?
-          } else {
-            source_frame = map_frame_;          // base_frame_; - buggy at the moment
-          }
-          */
-          tf_listener_.lookupTransform(camera_frame_,  source_frame,
-                                       ros::Time(0), tf_target);
 
           camera_position_ = {  xf.at<float>(0, 3),
                                 xf.at<float>(1, 3),
@@ -752,43 +730,13 @@ void ROSPublisher::publishCameraPose()
           tf::Transform Tmc = PublisherUtils::createTF(camera_position_,
                                                        orientation);
 
-          /* ------------------------------------
-           * Camera_optical pose in odom coordinate system
-           * divided into translation and rotation
-           */
-          tf::Transform Toc = PublisherUtils::createTF(tf_target.getOrigin(),
-                                                       tf_target.getRotation());
-
-          /* ------------------------------------
-           * Additional rotation for interface frame
-           * (no translation component) - static tf
-           */
-          static const tf::Transform Toc_int = PublisherUtils::createTF(tf::Vector3(0.0, 0.0, 0.0),
-                                                                        PublisherUtils::quaternionFromRPY(0.0, -90.0, 90.0));
-          Toc = Toc * Toc_int; // rotation applied to already transformed system (odom is reference here)
-
-          /* ------------------------------------
-           * Additional camera translation (it is
-           * mounted on top of the mobile base)
-           */
-          static const tf::Transform T_d_cam = PublisherUtils::createTF(tf::Vector3(0.0, 0.0, camera_height_),
-                                                                        PublisherUtils::quaternionFromRPY(0.0, 0.0, 0.0));
-
-          /* ------------------------------------
-           * Final computations
-           * TODO: interface frame should be allowed to be connected to /base_link or /odom
-           * not only to /odom
-           */
-          tf::Transform Tmo = Toc.inverse() * Tmc;
-          Tmo = T_d_cam * Tmo;
-
-          tf::StampedTransform transform(Tmo, ros::Time::now(), map_frame_,  source_frame);
+          tf::StampedTransform transform(Tmc, ros::Time::now(), map_frame_,  world_frame_);
           camera_tf_pub_.sendTransform(transform);
 
           // camera trajectory extraction
-          cam_pose_ = PublisherUtils::getPoseStamped(&Tmo, &camera_frame_);
+          cam_pose_ = PublisherUtils::getPoseStamped(&Tmc, &camera_frame_);
 
-          ResetCamFlag();
+          ROS_INFO("publishCameraPose()");
 
 
       } catch (tf::TransformException &ex) {
@@ -856,23 +804,8 @@ void ROSPublisher::publishState(Tracking *tracking)
     state_desc_msg.data = PublisherUtils::stateDescription(orb_state_); // stateDescription(orb_state_);
     state_desc_pub_.publish(state_desc_msg);
 
+    ROS_INFO("publishState()");
     // last_state_publish_time_ = ros::Time::now();
-}
-
-/*
- * Publishes the current ORB_SLAM 2 status image.
- */
-void ROSPublisher::publishImage(Tracking *tracking)
-{
-
-    drawer_.Update(tracking);
-
-    std_msgs::Header hdr;
-    cv_bridge::CvImage cv_img {hdr, "rbg8", drawer_.DrawFrame()};
-
-    auto image_msg = cv_img.toImageMsg();
-    image_msg->header = hdr;
-    image_pub_.publish(*image_msg);
 }
 
 /*
@@ -989,36 +922,27 @@ void ROSPublisher::camInfoUpdater() {
     if ( isCamUpdated() ) {
 
       static ros::Time last_camera_update;
-      float tf_delta = (ros::Time::now() - last_camera_update).toSec();
       last_camera_update = ros::Time::now();
 
       publishCameraPose();
 
-      // for better visualization only
-      if ( tf_delta < 0.75 ) {
-        ROS_INFO("Updated camera pose published after %.3f",  tf_delta);
-      } else if ( tf_delta < 1.50 ) {
-        ROS_WARN("Updated camera pose published after %.3f",  tf_delta);
-      } else {
-        ROS_ERROR("Updated camera pose published after %.3f", tf_delta);
-      }
-
       publishCamTrajectory();
 
+      
       if ( ros::Time::now() >= (last_state_publish_time_ +
            ros::Duration(1. / orb_state_republish_rate_)) )
       {
          // it's time to re-publish info
-         publishState(NULL);
-         publishUInt32Msg(kf_pub_, drawer_.GetKeyFramesNb());
-         publishUInt32Msg(kp_pub_, drawer_.GetKeypointsNb());
-         publishUInt32Msg(mp_pub_, drawer_.GetMatchedPointsNb());
-         publishLoopState(GetLoopCloser()->isRunningGBA()); // GBA is quite time-consuming task so it will probably be detected here
+         publishUInt32Msg(kf_pub_, drawer_->GetKeyFramesNb());
+         publishUInt32Msg(kp_pub_, drawer_->GetKeypointsNb());
+         publishUInt32Msg(mp_pub_, drawer_->GetMatchedPointsNb());
+         publishLoopState(GetSystem()->GetLoopClosing()->isRunningGBA()); // GBA is quite time-consuming task so it will probably be detected here
          last_state_publish_time_ = ros::Time::now();
       }
+      
     }
   }
-  ROS_ERROR("InfoUpdater finished");
+  ROS_WARN("InfoUpdater finished");
   SetFinish(true);
 
 
@@ -1111,9 +1035,11 @@ void ROSPublisher::Run()
             // publishMapUpdates();
             if (octomap_enabled_)
             {
+              ROS_WARN("octomap_enabled_");
               // stashMapPoints(); // store current reference map points for the octomap worker
               stashMapPoints(false);
             }
+            ResetCamFlag();
         }
     }
 
@@ -1136,11 +1062,6 @@ void ROSPublisher::Update(Tracking *tracking)
         return;
 
     publishState(tracking);
-
-    // TODO: Make sure the camera TF is correctly aligned. See:
-    // <http://docs.ros.org/jade/api/sensor_msgs/html/msg/Image.html>
-
-    publishImage(tracking);
 }
 
 void ROSPublisher::clearCamTrajectoryCallback(const std_msgs::Bool::ConstPtr& msg) {
@@ -1149,14 +1070,4 @@ void ROSPublisher::clearCamTrajectoryCallback(const std_msgs::Bool::ConstPtr& ms
   } else if ( msg->data == false ) {
     clear_path_ = false;
   }
-}
-
-void ROSPublisher::localizationModeCallback(const std_msgs::Bool::ConstPtr& msg) {
-
-  if ( msg->data == true ) {
-    localize_only = true;
-  } else if ( msg->data == false ) {
-    localize_only = false;
-  }
-
 }

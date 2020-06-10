@@ -84,15 +84,12 @@ private:
     void publishCameraPose();
     void publishOctomap();
     void publishState(Ladybug_SLAM::Tracking *tracking);
-    void publishImage(Ladybug_SLAM::Tracking *tracking);
     void publishProjectedMap();
     void publishGradientMap();
     void publishCamTrajectory();
 
-    Ladybug_SLAM::FrameDrawer drawer_;
+    Ladybug_SLAM::FrameDrawer* drawer_;
 
-    /* Important: 'nh_' goes before the '*_pub_', because their
-    ** construction relies on 'nh_'! */
     ros::NodeHandle   nh_;
     ros::Publisher    map_pub_, map_updates_pub_, image_pub_, odom_pub_,
                       state_pub_, state_desc_pub_, octomap_pub_,
@@ -175,6 +172,7 @@ private:
     std::string camera_frame_;
     std::string map_frame_adjusted_;
     std::string base_frame_;
+    std::string world_frame_;
 
     // state republish rate
     ladybug_msgs::ORBState  orb_state_;
