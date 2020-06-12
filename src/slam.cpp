@@ -148,7 +148,7 @@ int main(int argc, char **argv)
   cv::Rect rect(0,0,1232,1200);
   LBG.SetRect(rect);
 
-  bool dense_reconstruction = true;
+  bool dense_reconstruction = false;
   bool debug = true;
 
   Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, dense_reconstruction, ORB_FEATURE_MATCHER, debug);

@@ -142,6 +142,9 @@ private:
     bool            publish_projected_map_;
     bool            publish_gradient_map_;
 
+    // ------ Semi Dense Reconstruction
+    bool use_semi_dense_reconstruction_;
+
     // ------ PCL
     octomap::Pointcloud pointcloud_map_points_;
     std::mutex          pointcloud_map_points_mutex_;

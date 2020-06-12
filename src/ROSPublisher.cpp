@@ -155,12 +155,14 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<std::string>("/ladybug_slam/frame/map_frame_adjusted", map_frame_adjusted_, "/ladybug_slam/odom");
   nh.param<std::string>("/ladybug_slam/frame/camera_frame",       camera_frame_,       ROSPublisher::DEFAULT_CAMERA_FRAME);
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
-  nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,         "/ladybug_slam/world_frame");
+  nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,        "/ladybug_slam/world_frame");
 
   nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  false);
   nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
+
+  nh.param<bool>("/ladybug_slam/use_semi_dense_reconstruction",  use_semi_dense_reconstruction_, true);
 
   nh.param<bool>("/ladybug_slam/octomap/rebuild",  octomap_rebuild_, false);
   nh.param<float>("/ladybug_slam/octomap/rate",    octomap_rate_,    1.0);
@@ -198,6 +200,8 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   std::cout << "- camera_frame:  " << camera_frame_ << std::endl;
   std::cout << "- base_frame:  " << base_frame_ << std::endl;
   std::cout << "- world_frame:  " << world_frame_ << std::endl;
+  std::cout << "SEMI-DENSE RECONSTRUCTION" << endl;
+  std::cout << "- use_semi_dense_reconstruction:  " << use_semi_dense_reconstruction_ << std::endl;
   std::cout << "OCTOMAP" << endl;
   std::cout << "- octomap/enabled:  " << octomap_enabled_ << std::endl;
   std::cout << "- octomap/publish_octomap:  " << publish_octomap_ << std::endl;
@@ -914,7 +918,8 @@ void ROSPublisher::publishUInt32Msg(const ros::Publisher &pub, const unsigned lo
 void ROSPublisher::publishImage()
 {
     std_msgs::Header hdr;
-    sensor_msgs::ImagePtr cv_ptr0 = cv_bridge::CvImage(hdr, "rgb8", drawer_->DrawFrame()).toImageMsg();
+
+    sensor_msgs::ImagePtr cv_ptr0 = cv_bridge::CvImage(hdr, "rgb8", drawer_->DrawFrame(true)).toImageMsg();
 
     image_pub_.publish(*cv_ptr0);
     
@@ -1032,7 +1037,10 @@ void ROSPublisher::Run()
       octomap_worker_thread_ = std::thread( [this] { octomapWorker(); } );
     }
 
-    semi_dense_thread_ = std::thread( [this] { SemiDenseUpdater(); } );
+    if(use_semi_dense_reconstruction_){
+      ROS_WARN("semi_dense_reconstruction_thread started...");
+      semi_dense_thread_ = std::thread( [this] { SemiDenseUpdater(); } );
+    }
 
     SetFinish(false);
     
@@ -1075,10 +1083,12 @@ void ROSPublisher::Run()
     ROS_INFO("ROS publisher finished");
     SetFinish(true);
 
-    semi_dense_thread_.join();
+    if(use_semi_dense_reconstruction_){
+      semi_dense_thread_.join();
+    }
 
     if (octomap_enabled_) {
-      octomap_worker_thread_.join()
+      octomap_worker_thread_.join();
     }
 
     
