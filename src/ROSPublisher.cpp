@@ -92,46 +92,6 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
       }
     }
 
-    /*
-    if ( perform_scale_correction_ ) { // TODO: make available only for monocular cameras
-
-      try {
-
-        // only "z" translation component is used (to put PCL/octomap higher/lower)
-        tf::StampedTransform tf_target;
-        tf::Vector3 cam_base_translation_tf_;
-
-        tf_listener_.waitForTransform(camera_frame_, base_frame_, ros::Time::now(), ros::Duration(1.0));
-        tf_listener_.lookupTransform (camera_frame_, base_frame_, ros::Time(0), tf_target);
-
-        cam_base_translation_tf_.setX(tf_target.getOrigin().x());
-        cam_base_translation_tf_.setY(tf_target.getOrigin().y());
-        cam_base_translation_tf_.setZ(tf_target.getOrigin().z());
-        cam_base_translation_tf_.setW(tfScalar(1.0));
-
-        // rotation base -> camera applied to corresponding translation from real world
-        tf::Transform tf = PublisherUtils::createTF(cam_base_translation_tf_,
-                                                    PublisherUtils::quaternionFromRPY(0.0, 0.0, 0.0));
-
-        tf::Transform tf_correction = PublisherUtils::createTF(tf::Vector3(0.0, 0.0, 0.0),
-                                                               PublisherUtils::quaternionFromRPY(90.0, 0.0, -90.0));
-        tf = tf_correction * tf;
-
-        camera_height_ = tf.getOrigin().z();
-        ROS_INFO("camera height: %.1f", camera_height_);
-
-      } catch (tf::TransformException &ex) {
-        ROS_ERROR("%s",ex.what());
-        ros::Duration(3.0).sleep();
-      }
-
-    } else {
-
-      ROS_INFO("camera height: %.1f", camera_height_);
-
-    }
-    */
-
     // used because of scale correction coefficient non-ideal estimation
     camera_height_corrected_ = camera_height_ * camera_height_mult_;
     static nav_msgs::Path msg;
@@ -157,8 +117,8 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
   nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,        "/ladybug_slam/world_frame");
 
-  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
-  nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
+  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        true);
+  nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        true);
   nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  false);
   nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
 
@@ -286,7 +246,7 @@ void ROSPublisher::octomapWorker()
     // wait until Ladybug_SLAM is up and running
     ROS_INFO("octomapWorker thread: waiting for ORBState OK");
 
-    while (orb_state_.state != ladybug_msgs::ORBState::OK)
+    while (GetSystem() != nullptr && !GetSystem()->isFinished() && orb_state_.state != ladybug_msgs::ORBState::OK)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
@@ -294,8 +254,9 @@ void ROSPublisher::octomapWorker()
     ROS_INFO("octomapWorker thread: starting to work (ORBState is OK)");
 
     // main thread loop
-    while (!isStopped())
+    while (GetSystem() != nullptr && !GetSystem()->isFinished() && !isStopped())
     {
+
         this_cycle_time = std::chrono::system_clock::now();
 
         if ( !got_tf ) {
@@ -332,11 +293,6 @@ void ROSPublisher::octomapWorker()
             octomap_.clear();
             ROS_INFO("octomapWorker: octomap cleared, rebuilding...");
 
-            /*
-             * TODO: if pointcloud is supposed to be a lidar scan result, this is problematic
-             * (multiple hits on one beam/previous hits getting overwritten etc.)
-             *
-             */
             stashMapPoints(true);     // stash whole map
             clear_octomap_ = false;   // TODO: mutex?
           }
@@ -352,7 +308,7 @@ void ROSPublisher::octomapWorker()
           octomap_tf_based_ = got_tf;
 
           if ( publish_octomap_ ) {
-            //ROS_INFO("Publishing Octomap...");
+            ROS_INFO("Publishing Octomap...");
             publishOctomap();
             //ROS_INFO("Octomap published");
           }
@@ -381,9 +337,10 @@ void ROSPublisher::octomapWorker()
         }
 
         std::this_thread::sleep_until(this_cycle_time + std::chrono::milliseconds((int) (1000. / octomap_rate_)));
+
     }
 
-    ROS_INFO("octomapWorker thread: stopped");
+    ROS_WARN("octomapWorker thread: stopped");
 }
 
 /*
@@ -755,35 +712,32 @@ void ROSPublisher::publishCameraPose()
  */
 void ROSPublisher::publishOctomap()
 {
-    if (octomap_pub_.getNumSubscribers() > 0)
+    auto t0 = std::chrono::system_clock::now();
+    octomap_msgs::Octomap msgOctomap;
+    msgOctomap.header.frame_id = map_frame_;
+    /* TODO: add as a parameter
+    if ( adjust_map_frame_ ) {
+
+      msgOctomap.header.frame_id =  octomap_tf_based_ ?
+                                            map_frame_adjusted_ :
+                                            map_frame_;
+
+      msgOctomap.header.frame_id = octomap_frame_;
+    } else {
+      msgOctomap.header.frame_id =  map_frame_;
+    }
+    */
+    msgOctomap.header.stamp = ros::Time::now();
+    if (octomap_msgs::binaryMapToMsg(octomap_, msgOctomap))   // TODO: full/binary...?
     {
-        auto t0 = std::chrono::system_clock::now();
-        octomap_msgs::Octomap msgOctomap;
-        msgOctomap.header.frame_id = map_frame_;
-        /* TODO: add as a parameter
-        if ( adjust_map_frame_ ) {
-
-          msgOctomap.header.frame_id =  octomap_tf_based_ ?
-                                                map_frame_adjusted_ :
-                                                map_frame_;
-
-          msgOctomap.header.frame_id = octomap_frame_;
-        } else {
-          msgOctomap.header.frame_id =  map_frame_;
-        }
-        */
-        msgOctomap.header.stamp = ros::Time::now();
-        if (octomap_msgs::binaryMapToMsg(octomap_, msgOctomap))   // TODO: full/binary...?
-        {
-            auto tn = std::chrono::system_clock::now();
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(tn - t0);
-            //std::cout << "msg generation time: " << dt.count() << " ms" << std::endl;
-            t0 = std::chrono::system_clock::now();
-            octomap_pub_.publish(msgOctomap);
-            tn = std::chrono::system_clock::now();
-            dt = std::chrono::duration_cast<std::chrono::milliseconds>(tn - t0);
-            //std::cout << "msg publish time: " << dt.count() << " ms" << std::endl;
-        }
+        auto tn = std::chrono::system_clock::now();
+        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(tn - t0);
+        //std::cout << "msg generation time: " << dt.count() << " ms" << std::endl;
+        t0 = std::chrono::system_clock::now();
+        octomap_pub_.publish(msgOctomap);
+        tn = std::chrono::system_clock::now();
+        dt = std::chrono::duration_cast<std::chrono::milliseconds>(tn - t0);
+        //std::cout << "msg publish time: " << dt.count() << " ms" << std::endl;
     }
 }
 
@@ -1068,8 +1022,8 @@ void ROSPublisher::Run()
               last_state_publish_time_ = ros::Time::now();
             }
 
-            // publishMap();
-            // publishMapUpdates();
+            publishMap();
+            publishMapUpdates();
             if (octomap_enabled_)
             {
               ROS_WARN("octomap_enabled_");
