@@ -100,11 +100,12 @@ public:
     images[4]=cv_ptr4->image;
 
     cv::Mat Pos = SLAM->TrackPanobyFishEye(msg.ImgStringName, images, msg.tframe);
+
     octmap_publisher->Update(SLAM->GetTracking());
 
     if(Pos.cols == 4 && Pos.rows == 4){
 
-/*
+        /*
         change_frame.setOrigin(tf::Vector3(Pos.at<double>(0, 3), Pos.at<double>(1, 3), Pos.at<double>(2, 3)));
 
         Eigen::Matrix<float, 3, 3> eigen_mat;
@@ -115,9 +116,9 @@ public:
         frame_rotation.setRPY(ea.x(), ea.y(), ea.z()); 
         change_frame.setRotation(frame_rotation);
         broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "ladybug_slam/camera", "ladybug_slam/odom"));
-        ROS_WARN("Setting new pos of the camera");
+        
         */
-
+        ROS_WARN("Setting new pos of the camera");
         octmap_publisher->SetCurrentCameraPose(Pos);
     }
   }
@@ -147,7 +148,10 @@ int main(int argc, char **argv)
   cv::Rect rect(0,0,1232,1200);
   LBG.SetRect(rect);
 
-  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, ORB_FEATURE_MATCHER, false);
+  bool dense_reconstruction = true;
+  bool debug = true;
+
+  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, dense_reconstruction, ORB_FEATURE_MATCHER, debug);
 
   SLAM.Start();
 
@@ -174,7 +178,9 @@ int main(int argc, char **argv)
   cout << endl << endl << "Finished" << endl;
   SLAM.Shutdown(true);
 
+  ROS_WARN("Shutdown");
   // wait the second thread to finish
+  ROS_WARN("thread_b join");
   thread_b.join();
 
   return 0;

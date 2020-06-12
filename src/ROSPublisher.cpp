@@ -63,16 +63,17 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
     SetSystem(system);
 
     // initialize publishers
-    map_pub_         = nh_.advertise<sensor_msgs::PointCloud2>("map", 3);
-    map_updates_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("map_updates", 3);
-    image_pub_       = nh_.advertise<sensor_msgs::Image>("frame", 5);
-    state_pub_       = nh_.advertise<ladybug_msgs::ORBState>("info/state", 10);
-    state_desc_pub_  = nh_.advertise<std_msgs::String>("info/state_description", 10);
-    kp_pub_          = nh_.advertise<std_msgs::UInt32>("info/frame_keypoints", 1);
-    kf_pub_          = nh_.advertise<std_msgs::UInt32>("info/map_keyframes", 1);
-    mp_pub_          = nh_.advertise<std_msgs::UInt32>("info/matched_points", 1);
-    loop_close_pub_  = nh_.advertise<std_msgs::Bool>("info/loop_closed", 2);
-    trajectory_pub_  = nh_.advertise<nav_msgs::Path>("cam_path", 2);
+    map_pub_            = nh_.advertise<sensor_msgs::PointCloud2>("map", 3);
+    map_updates_pub_    = nh_.advertise<sensor_msgs::PointCloud2>("map_updates", 3);
+    map_semidense_pub_  = nh_.advertise<sensor_msgs::PointCloud2>("map_semidense", 3);
+    image_pub_          = nh_.advertise<sensor_msgs::Image>("frame", 5);
+    state_pub_          = nh_.advertise<ladybug_msgs::ORBState>("info/state", 10);
+    state_desc_pub_     = nh_.advertise<std_msgs::String>("info/state_description", 10);
+    kp_pub_             = nh_.advertise<std_msgs::UInt32>("info/frame_keypoints", 1);
+    kf_pub_             = nh_.advertise<std_msgs::UInt32>("info/map_keyframes", 1);
+    mp_pub_             = nh_.advertise<std_msgs::UInt32>("info/matched_points", 1);
+    loop_close_pub_     = nh_.advertise<std_msgs::Bool>("info/loop_closed", 2);
+    trajectory_pub_     = nh_.advertise<nav_msgs::Path>("cam_path", 2);
 
     // initialize subscribers
     clear_path_sub_ = nh_.subscribe("clear_cam_path", 1, &ROSPublisher::clearCamTrajectoryCallback, this);
@@ -91,6 +92,7 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
       }
     }
 
+    /*
     if ( perform_scale_correction_ ) { // TODO: make available only for monocular cameras
 
       try {
@@ -128,9 +130,12 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
       ROS_INFO("camera height: %.1f", camera_height_);
 
     }
+    */
 
     // used because of scale correction coefficient non-ideal estimation
     camera_height_corrected_ = camera_height_ * camera_height_mult_;
+    static nav_msgs::Path msg;
+    msg.poses.clear();
 
 }
 
@@ -142,7 +147,7 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   // odom topic defined in ScaleCorrector.cpp
   nh.param<bool>("/ladybug_slam/map_scale/perform_correction",        perform_scale_correction_,  false);
   nh.param<float>("/ladybug_slam/map_scale/scaling_distance",         scaling_distance_,          1.000);
-  nh.param<float>("/ladybug_slam/map_scale/set_manually",             map_scale_,                 1.500);
+  nh.param<float>("/ladybug_slam/map_scale/set_manually",             map_scale_,                 1.000);
   nh.param<float>("/ladybug_slam/map_scale/camera_height",            camera_height_,             0.205);
   nh.param<float>("/ladybug_slam/map_scale/camera_height_multiplier", camera_height_mult_,        1.000);
 
@@ -227,7 +232,7 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
 
 /*
  * Either appends all GetReferenceMapPoints to the pointcloud stash or clears the stash and re-fills it
- * with GetAllMapPoints, in case there is a big map change in ORB_SLAM 2 or all_map_points is set to true.
+ * with GetAllMapPoints, in case there is a big map change in Ladybug_SLAM or all_map_points is set to true.
  */
 void ROSPublisher::stashMapPoints(bool all_map_points)
 {
@@ -274,7 +279,7 @@ void ROSPublisher::octomapWorker()
     octomap::point3d origin = { 0.0, 0.0, 0.0 };
     bool got_tf = false;
 
-    // wait until ORB_SLAM 2 is up and running
+    // wait until Ladybug_SLAM is up and running
     ROS_INFO("octomapWorker thread: waiting for ORBState OK");
 
     while (orb_state_.state != ladybug_msgs::ORBState::OK)
@@ -676,7 +681,7 @@ void ROSPublisher::octomapGradientToOccupancyGrid(const octomap::OcTree& octree,
 }
 
 /*
- * Publishes ORB_SLAM 2 GetAllMapPoints() as a PointCloud2.
+ * Publishes Ladybug_SLAM GetAllMapPoints() as a PointCloud2.
  */
 void ROSPublisher::publishMap()
 {
@@ -689,15 +694,10 @@ void ROSPublisher::publishMap()
 }
 
 /*
- * Publishes ORB_SLAM 2 GetReferenceMapPoints() as a PointCloud2.
+ * Publishes Ladybug_SLAM GetReferenceMapPoints() as a PointCloud2.
  */
 void ROSPublisher::publishMapUpdates()
 {
-    /*
-    sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetAllMapPoints(),
-                                                                  map_scale_,
-                                                                  camera_height_corrected_);
-      */
     sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetReferenceMapPoints(),
                                                                   map_scale_,
                                                                   camera_height_corrected_);
@@ -706,7 +706,7 @@ void ROSPublisher::publishMapUpdates()
 }
 
 /*
- * Publishes ORB_SLAM 2 GetCameraPose() as a TF.
+ * Publishes Ladybug_SLAM GetCameraPose() as a TF.
  */
 void ROSPublisher::publishCameraPose()
 {
@@ -740,7 +740,7 @@ void ROSPublisher::publishCameraPose()
 
 
       } catch (tf::TransformException &ex) {
-          ROS_ERROR("%s",ex.what());
+          ROS_ERROR("publishCameraPose error: %s",ex.what());
           ros::Duration(3.0).sleep();
       }
     }
@@ -784,7 +784,7 @@ void ROSPublisher::publishOctomap()
 }
 
 /*
- * Publishes the ORB_SLAM 2 tracking state as ORBState int and/or as a description string.
+ * Publishes the Ladybug_SLAM tracking state as ORBState int and/or as a description string.
  */
 void ROSPublisher::publishState(Tracking *tracking)
 {
@@ -792,20 +792,23 @@ void ROSPublisher::publishState(Tracking *tracking)
     if (tracking != NULL) {
         // save state from tracking, even if there are no subscribers
         orb_state_ = PublisherUtils::toORBStateMessage(tracking->mState);
+    
+        if(tracking->mState == Ladybug_SLAM::Tracking::LOST)
+        {
+            clear_path_ = true;
+        }
+        // publish state as ORBState int
+        orb_state_.header.stamp = ros::Time::now();
+        state_pub_.publish(orb_state_);
+
+        // publish state as string
+        std_msgs::String state_desc_msg;
+        // const char* test = PublisherUtils::stateDescription(orb_state_);
+        state_desc_msg.data = PublisherUtils::stateDescription(orb_state_); // stateDescription(orb_state_);
+        state_desc_pub_.publish(state_desc_msg);
+
+        // last_state_publish_time_ = ros::Time::now();
     }
-
-    // publish state as ORBState int
-    orb_state_.header.stamp = ros::Time::now();
-    state_pub_.publish(orb_state_);
-
-    // publish state as string
-    std_msgs::String state_desc_msg;
-    // const char* test = PublisherUtils::stateDescription(orb_state_);
-    state_desc_msg.data = PublisherUtils::stateDescription(orb_state_); // stateDescription(orb_state_);
-    state_desc_pub_.publish(state_desc_msg);
-
-    ROS_INFO("publishState()");
-    // last_state_publish_time_ = ros::Time::now();
 }
 
 /*
@@ -814,42 +817,35 @@ void ROSPublisher::publishState(Tracking *tracking)
 void ROSPublisher::publishProjectedMap()
 {
 
-    int8_t proj_sub_nr = projected_map_pub_.getNumSubscribers();
-    int8_t proj_ero_sub_nr = projected_morpho_map_pub_.getNumSubscribers();
+    static nav_msgs::OccupancyGrid msg;
+    static nav_msgs::OccupancyGrid msg_eroded;
 
-    if ( proj_sub_nr | proj_ero_sub_nr ) {
+    msg.header.frame_id = map_frame_;
+    msg_eroded.header.frame_id = map_frame_;
+    /*
+    if ( adjust_map_frame_ ) {
 
-        static nav_msgs::OccupancyGrid msg;
-        static nav_msgs::OccupancyGrid msg_eroded;
+      msg.header.frame_id =  octomap_tf_based_ ?
+                                            map_frame_adjusted_ :
+                                            map_frame_;
 
-        msg.header.frame_id = map_frame_;
-        msg_eroded.header.frame_id = map_frame_;
-        /*
-        if ( adjust_map_frame_ ) {
-
-          msg.header.frame_id =  octomap_tf_based_ ?
-                                                map_frame_adjusted_ :
-                                                map_frame_;
-
-          msg.header.frame_id = octomap_frame_; == map
-          msg_eroded.header.frame_id = octomap_frame_;
-        } else {
-          msg.header.frame_id =  map_frame_;
-          msg_eroded.header.frame_id =  map_frame_;
-        }
-        */
-        msg.header.stamp = ros::Time::now();
-        msg_eroded.header.stamp = ros::Time::now();
-
-        octomapCutToOccupancyGrid(octomap_, msg, msg_eroded, projection_min_height_, projection_max_height_);
-
-        // one of maps published
-        if ( proj_sub_nr > 0 ) {
-          projected_map_pub_.publish(msg);
-        } else {
-          projected_morpho_map_pub_.publish(msg_eroded);
-        }
+      msg.header.frame_id = octomap_frame_; == map
+      msg_eroded.header.frame_id = octomap_frame_;
+    } else {
+      msg.header.frame_id =  map_frame_;
+      msg_eroded.header.frame_id =  map_frame_;
     }
+    */
+    msg.header.stamp = ros::Time::now();
+    msg_eroded.header.stamp = ros::Time::now();
+
+    octomapCutToOccupancyGrid(octomap_, msg, msg_eroded, projection_min_height_, projection_max_height_);
+
+    // one of maps published
+    projected_map_pub_.publish(msg);
+    
+    // projected_morpho_map_pub_.publish(msg_eroded);
+    
 }
 
 /*
@@ -912,37 +908,55 @@ void ROSPublisher::publishUInt32Msg(const ros::Publisher &pub, const unsigned lo
   pub.publish(msg);
 }
 
+/*
+ * Publishes the current Ladybug_SLAM status image.
+ */
+void ROSPublisher::publishImage()
+{
+    std_msgs::Header hdr;
+    sensor_msgs::ImagePtr cv_ptr0 = cv_bridge::CvImage(hdr, "rgb8", drawer_->DrawFrame()).toImageMsg();
 
-void ROSPublisher::camInfoUpdater() {
+    image_pub_.publish(*cv_ptr0);
+    
+}
+
+void ROSPublisher::SemiDenseUpdater() {
 
   // these operations are moved from Run() to separate thread, it was crucial in my application
   // to get camera pose updates as frequently as possible
 
-  while (WaitCycleStart()) {
-    if ( isCamUpdated() ) {
+  std::chrono::system_clock::time_point a = std::chrono::system_clock::now();
+  std::chrono::system_clock::time_point b = std::chrono::system_clock::now();
 
-      static ros::Time last_camera_update;
-      last_camera_update = ros::Time::now();
+  ROS_WARN("SemiDenseUpdater started");
+  while (GetSystem() != nullptr && !GetSystem()->isFinished()) {
 
-      publishCameraPose();
+            // Maintain designated frequency of 1 Hz (1000 ms per frame)
+        a = std::chrono::system_clock::now();
+        std::chrono::duration<double, std::milli> work_time = a - b;
 
-      publishCamTrajectory();
+        if (work_time.count() < 1000.0)
+        {
+            std::chrono::duration<double, std::milli> delta_ms(1000.0 - work_time.count());
+            auto delta_ms_duration = std::chrono::duration_cast<std::chrono::milliseconds>(delta_ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delta_ms_duration.count()));
+        }
 
-      
-      if ( ros::Time::now() >= (last_state_publish_time_ +
-           ros::Duration(1. / orb_state_republish_rate_)) )
-      {
-         // it's time to re-publish info
-         publishUInt32Msg(kf_pub_, drawer_->GetKeyFramesNb());
-         publishUInt32Msg(kp_pub_, drawer_->GetKeypointsNb());
-         publishUInt32Msg(mp_pub_, drawer_->GetMatchedPointsNb());
-         publishLoopState(GetSystem()->GetLoopClosing()->isRunningGBA()); // GBA is quite time-consuming task so it will probably be detected here
-         last_state_publish_time_ = ros::Time::now();
-      }
-      
-    }
+        b = std::chrono::system_clock::now();
+        std::chrono::duration<double, std::milli> sleep_time = b - a;
+
+      Map* map = GetMap();
+      if(map == nullptr)
+          break;
+          
+      sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(map->GetMergedMapPoints(),
+                                                                    map_scale_,
+                                                                    camera_height_corrected_);
+      msg.header.frame_id = map_frame_;
+      map_semidense_pub_.publish(msg);
+    
   }
-  ROS_WARN("InfoUpdater finished");
+  ROS_WARN("SemiDenseUpdater finished");
   SetFinish(true);
 
 
@@ -955,6 +969,7 @@ void ROSPublisher::Run()
 
     ROS_INFO("ROS publisher started");
 
+    /*
     if ( perform_scale_correction_) {
 
       bool scale_correction = false; // flag to check state at the end
@@ -964,7 +979,7 @@ void ROSPublisher::Run()
 
         if ( isStopRequested() ) {
           Stop();
-          // GetSystem()->Shutdown();
+          GetSystem()->Shutdown();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
       }
@@ -1010,28 +1025,42 @@ void ROSPublisher::Run()
     }
 
     ROS_WARN("Finished the map scale correction procedure...");
+    */
 
-    /*
-     * Moved here from constructor - there is a small map
-     * created just before start of the correction procedure
-     */
     if (octomap_enabled_) {
       ROS_WARN("octomap_worker_thread_ started...");
       octomap_worker_thread_ = std::thread( [this] { octomapWorker(); } );
     }
 
-    info_updater_thread_ = std::thread( [this] { camInfoUpdater(); } );
-    ROS_WARN("info_updater_thread_ started...");
+    semi_dense_thread_ = std::thread( [this] { SemiDenseUpdater(); } );
 
     SetFinish(false);
+    
     while (WaitCycleStart()) {
 
         // only publish map, map updates and camera pose, if camera pose was updated
-        // TODO: maybe there is a way to check if the map was updated
         if (isCamUpdated()) {
             ROS_WARN("isCamUpdated()");
 
-            publishMap();
+            static ros::Time last_camera_update;
+            last_camera_update = ros::Time::now();
+
+            publishCameraPose();
+
+            publishCamTrajectory();
+            
+            if ( ros::Time::now() >= (last_state_publish_time_ +
+                ros::Duration(1. / orb_state_republish_rate_)) )
+            {
+              // it's time to re-publish info
+              publishUInt32Msg(kf_pub_, drawer_->GetKeyFramesNb());
+              publishUInt32Msg(kp_pub_, drawer_->GetKeypointsNb());
+              publishUInt32Msg(mp_pub_, drawer_->GetMatchedPointsNb());
+              publishLoopState(GetSystem()->GetLoopClosing()->isRunningGBA()); // GBA is quite time-consuming task so it will probably be detected here
+              last_state_publish_time_ = ros::Time::now();
+            }
+
+            // publishMap();
             // publishMapUpdates();
             if (octomap_enabled_)
             {
@@ -1045,11 +1074,19 @@ void ROSPublisher::Run()
 
     ROS_INFO("ROS publisher finished");
     SetFinish(true);
+
+    semi_dense_thread_.join();
+
+    if (octomap_enabled_) {
+      octomap_worker_thread_.join()
+    }
+
+    
 }
 
 bool ROSPublisher::WaitCycleStart()
 {
-    if (GetSystem()->isFinished())
+    if (GetSystem() == nullptr || GetSystem()->isFinished())
         return false;
     pub_rate_.sleep();
     return true;
@@ -1057,11 +1094,12 @@ bool ROSPublisher::WaitCycleStart()
 
 void ROSPublisher::Update(Tracking *tracking)
 {
-    static std::mutex mutex;
     if (tracking == nullptr)
         return;
-
     publishState(tracking);
+
+    ROS_INFO("publishImage");
+    publishImage();
 }
 
 void ROSPublisher::clearCamTrajectoryCallback(const std_msgs::Bool::ConstPtr& msg) {

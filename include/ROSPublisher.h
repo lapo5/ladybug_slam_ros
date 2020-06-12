@@ -71,7 +71,7 @@ private:
     void initializeParameters(ros::NodeHandle &nh);
     void stashMapPoints(bool all_map_points = false);
     void octomapWorker();
-    void camInfoUpdater();
+    void SemiDenseUpdater();
 
     void updateOctoMap();
     void integrateMapPoints(const std::vector<Ladybug_SLAM::MapPoint*> &, const octomap::point3d &, const octomap::pose6d &, octomap::OcTree &);
@@ -84,6 +84,7 @@ private:
     void publishCameraPose();
     void publishOctomap();
     void publishState(Ladybug_SLAM::Tracking *tracking);
+    void publishImage();
     void publishProjectedMap();
     void publishGradientMap();
     void publishCamTrajectory();
@@ -91,14 +92,14 @@ private:
     Ladybug_SLAM::FrameDrawer* drawer_;
 
     ros::NodeHandle   nh_;
-    ros::Publisher    map_pub_, map_updates_pub_, image_pub_, odom_pub_,
+    ros::Publisher    map_pub_, map_updates_pub_, map_semidense_pub_, image_pub_, odom_pub_,
                       state_pub_, state_desc_pub_, octomap_pub_,
                       projected_map_pub_, projected_morpho_map_pub_, gradient_map_pub_,
                       kf_pub_, kp_pub_, mp_pub_,
                       trajectory_pub_,
                       loop_close_pub_;
     ros::Rate         pub_rate_;
-    std::thread       info_updater_thread_;
+    std::thread       semi_dense_thread_;
 
     geometry_msgs::PoseStamped cam_pose_;
     ros::Subscriber   clear_path_sub_;
