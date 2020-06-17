@@ -63,9 +63,8 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
     SetSystem(system);
 
     // initialize publishers
-    map_pub_            = nh_.advertise<sensor_msgs::PointCloud2>("map", 3);
-    map_updates_pub_    = nh_.advertise<sensor_msgs::PointCloud2>("map_updates", 3);
-    map_semidense_pub_  = nh_.advertise<sensor_msgs::PointCloud2>("map_semidense", 3);
+    map_pub_            = nh_.advertise<sensor_msgs::PointCloud2>("pointcloud_map", 5);
+    // map_semidense_pub_  = nh_.advertise<sensor_msgs::PointCloud2>("map_semidense", 3);
     image_pub_          = nh_.advertise<sensor_msgs::Image>("frame", 5);
     state_pub_          = nh_.advertise<ladybug_msgs::ORBState>("info/state", 10);
     state_desc_pub_     = nh_.advertise<std_msgs::String>("info/state_description", 10);
@@ -117,8 +116,8 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
   nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,        "/ladybug_slam/world_frame");
 
-  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        true);
-  nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        true);
+  nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
+  nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  false);
   nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
 
@@ -646,9 +645,7 @@ void ROSPublisher::octomapGradientToOccupancyGrid(const octomap::OcTree& octree,
  */
 void ROSPublisher::publishMap()
 {
-    sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetAllMapPoints(),
-                                                                     map_scale_,
-                                                                     camera_height_corrected_);
+    sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetAllMapPoints());
     msg.header.frame_id = map_frame_;
     map_pub_.publish(msg);
     ROS_INFO("publishMap()");
@@ -659,11 +656,9 @@ void ROSPublisher::publishMap()
  */
 void ROSPublisher::publishMapUpdates()
 {
-    sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetReferenceMapPoints(),
-                                                                  map_scale_,
-                                                                  camera_height_corrected_);
+    sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetReferenceMapPoints());
     msg.header.frame_id = map_frame_;
-    map_updates_pub_.publish(msg);
+    map_pub_.publish(msg);
 }
 
 /*
@@ -912,7 +907,7 @@ void ROSPublisher::SemiDenseUpdater() {
                                                                     map_scale_,
                                                                     camera_height_corrected_);
       msg.header.frame_id = map_frame_;
-      map_semidense_pub_.publish(msg);
+      map_pub_.publish(msg);
     
   }
   ROS_WARN("SemiDenseUpdater finished");
@@ -1024,6 +1019,7 @@ void ROSPublisher::Run()
 
             publishMap();
             publishMapUpdates();
+            
             if (octomap_enabled_)
             {
               ROS_WARN("octomap_enabled_");

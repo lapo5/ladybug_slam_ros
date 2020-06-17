@@ -20,7 +20,8 @@ sensor_msgs::PointCloud2 PublisherUtils::convertToPCL2( const std::vector<Ladybu
         if (map_point->isBad())
             continue;
         cv::Mat pos = map_point->GetWorldPos();
-        PublisherUtils::transformPoint(pos, map_scale, false, 0, camera_height);
+        
+        // PublisherUtils::transformPoint(pos, map_scale, false, 0, camera_height);
         dataptr[vtop++] = {
             pos.at<float>(0),
             pos.at<float>(1),
@@ -29,6 +30,61 @@ sensor_msgs::PointCloud2 PublisherUtils::convertToPCL2( const std::vector<Ladybu
 
     }
     ros::Duration tStop = (ros::Time::now() - tStart);
+    
+    ROS_INFO("sending PointCloud (%lu points), conversion took %.3f sec", n_map_points, tStop.toSec());
+
+    static const char* const names[3] = { "x", "y", "z" };
+    static const std::size_t offsets[3] = { offsetof(point, x), offsetof(point, y), offsetof(point, z) };
+    std::vector<sensor_msgs::PointField> fields(3);
+    for (int i=0; i < 3; i++) {
+        fields[i].name = names[i];
+        fields[i].offset = offsets[i];
+        fields[i].datatype = sensor_msgs::PointField::FLOAT32;
+        fields[i].count = 1;
+    }
+
+    sensor_msgs::PointCloud2 msg;
+    msg.height = 1;
+    msg.width = n_map_points;
+    msg.fields = fields;
+    msg.is_bigendian = PublisherUtils::IS_BIG_ENDIAN;
+    msg.point_step = sizeof(point);
+    msg.row_step = sizeof(point) * msg.width;
+    msg.data = std::move(data_buffer);
+    msg.is_dense = true;  // invalid points already filtered out
+    return msg;
+
+}
+
+sensor_msgs::PointCloud2 PublisherUtils::convertToPCL2( const std::vector<Ladybug_SLAM::MapPoint*> &map_points)
+{
+
+    const std::size_t n_map_points = map_points.size();
+
+    // Kind of a hack, but there aren't much better ways to avoid a copy
+    struct point { float x, y, z; };
+
+    std::vector<uint8_t> data_buffer(n_map_points * sizeof(point));
+    std::size_t vtop = 0;
+
+    point *dataptr = (point*) data_buffer.data();
+
+    ros::Time tStart = ros::Time::now();
+    for (Ladybug_SLAM::MapPoint *map_point : map_points) {
+        if (map_point->isBad())
+            continue;
+        cv::Mat pos = map_point->GetWorldPos();
+        
+        // PublisherUtils::transformPoint(pos, map_scale, false, 0, camera_height);
+        dataptr[vtop++] = {
+            pos.at<float>(0),
+            pos.at<float>(1),
+            pos.at<float>(2),
+        };
+
+    }
+    ros::Duration tStop = (ros::Time::now() - tStart);
+    
     ROS_INFO("sending PointCloud (%lu points), conversion took %.3f sec", n_map_points, tStop.toSec());
 
     static const char* const names[3] = { "x", "y", "z" };

@@ -30,10 +30,18 @@ int main(int argc, char** argv)
 	tf::Quaternion frame_rotation;
 	frame_rotation.setRPY(0, 0, 0); 
 	change_frame.setRotation(frame_rotation);
+
+	tf::Transform id_transform;
+	id_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+
+	tf::Quaternion id_transform_rotation;
+	id_transform_rotation.setRPY(0, 0, 0); 
+	id_transform.setRotation(id_transform_rotation);
     
 	while(ros::ok()){
 		
 		broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "/ladybug_slam/base_link", "/ladybug_slam/camera"));
+		broadcaster.sendTransform(tf::StampedTransform(id_transform, ros::Time::now(), "/ladybug_slam/base_link", "/ladybug_slam/map"));
 				
 		ros::spinOnce();
 		r.sleep();

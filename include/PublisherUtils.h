@@ -20,6 +20,7 @@ namespace PublisherUtils {
 
 const ladybug_msgs::ORBState  toORBStateMessage(Ladybug_SLAM::Tracking::eTrackingState trackingState);
 geometry_msgs::PoseStamped    getPoseStamped(const tf::Transform* tf_, const std::string* frame_id_);
+sensor_msgs::PointCloud2      convertToPCL2( const std::vector<Ladybug_SLAM::MapPoint*> &map_points);
 sensor_msgs::PointCloud2      convertToPCL2( const std::vector<Ladybug_SLAM::MapPoint*> &map_points, const double &map_scale, const float &camera_height);
 template<typename Q> Q        convertToQuaternion(const cv::Mat& rot);
 template<typename T> T        getROSParam(ros::NodeHandle nh, std::string param_name, T default_value);void transformPoint(cv::Mat& pos_, const double &scale_, bool scale_only_, const unsigned char frame_flag_, const float &camera_height_);

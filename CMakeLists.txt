@@ -38,6 +38,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   nav_msgs
   cv_bridge
+  roslaunch
   image_transport
   ladybug_msgs
 )
@@ -97,6 +98,7 @@ set(LIBS
   ${PCL_LIBRARIES}
 )
 
+roslaunch_add_file_check(launch)
 
 catkin_package(
 #  INCLUDE_DIRS include
