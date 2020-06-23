@@ -1,0 +1,11 @@
+<launch>
+	<node pkg="ladybug_slam" type="slam" name="ladybug_slam">
+        <param name="use_semi_dense_reconstruction" value="true" />
+        <param name="use_debug" value="true" />
+    </node>
+
+	<node pkg="ladybug_slam" type="tf_broadcaster" name="tf_broadcaster_node">
+    </node>
+
+</launch>
+	

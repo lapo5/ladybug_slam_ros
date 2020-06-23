@@ -104,20 +104,6 @@ public:
     octmap_publisher->Update(SLAM->GetTracking());
 
     if(Pos.cols == 4 && Pos.rows == 4){
-
-        /*
-        change_frame.setOrigin(tf::Vector3(Pos.at<double>(0, 3), Pos.at<double>(1, 3), Pos.at<double>(2, 3)));
-
-        Eigen::Matrix<float, 3, 3> eigen_mat;
-        cv::Mat Rot = Pos.rowRange(0,3).colRange(0,3).clone();
-        cv::cv2eigen(Rot, eigen_mat);
-        Eigen::Vector3f ea = eigen_mat.eulerAngles(2, 1, 0);
-
-        frame_rotation.setRPY(ea.x(), ea.y(), ea.z()); 
-        change_frame.setRotation(frame_rotation);
-        broadcaster.sendTransform(tf::StampedTransform(change_frame, ros::Time::now(), "ladybug_slam/camera", "ladybug_slam/odom"));
-        
-        */
         ROS_WARN("Setting new pos of the camera");
         octmap_publisher->SetCurrentCameraPose(Pos);
     }
@@ -148,10 +134,14 @@ int main(int argc, char **argv)
   cv::Rect rect(0,0,1232,1200);
   LBG.SetRect(rect);
 
-  bool dense_reconstruction = true;
-  bool debug = true;
+  bool use_semi_dense_reconstruction_ = true;
+  bool use_debug_ = true;
 
-  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, dense_reconstruction, ORB_FEATURE_MATCHER, debug);
+  ros::NodeHandle nh("~");
+  nh.param<bool>("use_semi_dense_reconstruction",  use_semi_dense_reconstruction_, true);
+  nh.param<bool>("use_debug",  use_debug_, true);
+
+  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, use_semi_dense_reconstruction_, ORB_FEATURE_MATCHER, use_debug_);
 
   SLAM.Start();
 

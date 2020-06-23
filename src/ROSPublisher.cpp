@@ -54,7 +54,7 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
     camera_height_(0.205),
     camera_height_mult_(1.0),
     camera_height_corrected_(camera_height_*camera_height_mult_),
-    publish_octomap_(false), publish_projected_map_(true), publish_gradient_map_(false)
+    publish_octomap_(false)
 {
 
     initializeParameters(nh);
@@ -64,7 +64,6 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
 
     // initialize publishers
     map_pub_            = nh_.advertise<sensor_msgs::PointCloud2>("pointcloud_map", 5);
-    // map_semidense_pub_  = nh_.advertise<sensor_msgs::PointCloud2>("map_semidense", 3);
     image_pub_          = nh_.advertise<sensor_msgs::Image>("frame", 5);
     state_pub_          = nh_.advertise<ladybug_msgs::ORBState>("info/state", 10);
     state_desc_pub_     = nh_.advertise<std_msgs::String>("info/state_description", 10);
@@ -81,13 +80,6 @@ ROSPublisher::ROSPublisher(Map *map, System* system, double frequency, ros::Node
     {
       if ( publish_octomap_ ) {
         octomap_pub_ = nh_.advertise<octomap_msgs::Octomap>("octomap", 3);
-      }
-      if ( publish_projected_map_ ) {
-        projected_map_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5, 10);
-        projected_morpho_map_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("projected_morpho_map", 5, 10);
-      }
-      if ( publish_gradient_map_ ) {
-        gradient_map_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("gradient_map", 5, 10);
       }
     }
 
@@ -111,17 +103,14 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<float>("/ladybug_slam/map_scale/camera_height_multiplier", camera_height_mult_,        1.000);
 
   nh.param<std::string>("/ladybug_slam/frame/map_frame",          map_frame_,          ROSPublisher::DEFAULT_MAP_FRAME);
-  nh.param<std::string>("/ladybug_slam/frame/map_frame_adjusted", map_frame_adjusted_, "/ladybug_slam/odom");
   nh.param<std::string>("/ladybug_slam/frame/camera_frame",       camera_frame_,       ROSPublisher::DEFAULT_CAMERA_FRAME);
   nh.param<std::string>("/ladybug_slam/frame/base_frame",         base_frame_,         "/ladybug_slam/base_link");
   nh.param<std::string>("/ladybug_slam/frame/world_frame",        world_frame_,        "/ladybug_slam/world_frame");
 
   nh.param<bool>("/ladybug_slam/octomap/enabled",                octomap_enabled_,        false);
   nh.param<bool>("/ladybug_slam/octomap/publish_octomap",        publish_octomap_,        false);
-  nh.param<bool>("/ladybug_slam/octomap/publish_projected_map",  publish_projected_map_,  false);
-  nh.param<bool>("/ladybug_slam/octomap/publish_gradient_map",   publish_gradient_map_,   false);
 
-  nh.param<bool>("/ladybug_slam/use_semi_dense_reconstruction",  use_semi_dense_reconstruction_, true);
+  nh.param<bool>("use_semi_dense_reconstruction",  use_semi_dense_reconstruction_, true);
 
   nh.param<bool>("/ladybug_slam/octomap/rebuild",  octomap_rebuild_, false);
   nh.param<float>("/ladybug_slam/octomap/rate",    octomap_rate_,    1.0);
@@ -139,11 +128,6 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   nh.param<int>   ("/ladybug_slam/occupancy/projected_map/morpho_oprations/erode2_se_size", erode2_se_size_, 3);
   nh.param<int>   ("/ladybug_slam/occupancy/projected_map/morpho_oprations/erode2_nb",      erode2_nb_,      1);
 
-  nh.param<float> ("/ladybug_slam/occupancy/height_gradient_map/max_height",   gradient_max_height_,   0);
-  nh.param<int>   ("/ladybug_slam/occupancy/height_gradient_map/nb_erosions",  gradient_nb_erosions_,  1);
-  nh.param<float> ("/ladybug_slam/occupancy/height_gradient_map/low_slope",    gradient_low_slope_,    M_PI / 4.0);
-  nh.param<float> ("/ladybug_slam/occupancy/height_gradient_map/high_slope",   gradient_high_slope_,   M_PI / 3.0);
-
   std::cout << endl;
   std::cout << "ROS Publisher parameters" << endl;
   std::cout << "TOPIC" << endl;
@@ -155,7 +139,6 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   std::cout << "- camera_height_multiplier:  " << camera_height_mult_ << std::endl;
   std::cout << "FRAME" << endl;
   std::cout << "- map_frame:  " << map_frame_ << std::endl;
-  std::cout << "- map_frame_adjusted:  " << map_frame_adjusted_ << std::endl;
   std::cout << "- camera_frame:  " << camera_frame_ << std::endl;
   std::cout << "- base_frame:  " << base_frame_ << std::endl;
   std::cout << "- world_frame:  " << world_frame_ << std::endl;
@@ -164,8 +147,6 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   std::cout << "OCTOMAP" << endl;
   std::cout << "- octomap/enabled:  " << octomap_enabled_ << std::endl;
   std::cout << "- octomap/publish_octomap:  " << publish_octomap_ << std::endl;
-  std::cout << "- octomap/publish_projected_map:  " << publish_projected_map_ << std::endl;
-  std::cout << "- octomap/publish_gradient_map:  " << publish_gradient_map_ << std::endl;
   std::cout << "- octomap/rebuild:  " << octomap_rebuild_ << std::endl;
   std::cout << "- octomap/rate:  " << octomap_rate_ << std::endl;
   std::cout << "OCCUPANCY/PROJECTED_MAP" << endl;
@@ -178,11 +159,6 @@ void ROSPublisher::initializeParameters(ros::NodeHandle &nh) {
   std::cout << "- close_nb:  " << close_nb_ << std::endl;
   std::cout << "- erode_se_size:  " << erode_se_size_ << std::endl;
   std::cout << "- erode_nb:  " << erode_nb_ << std::endl;
-  std::cout << "OCCUPANCY/GRADIENT_MAP" << endl;
-  std::cout << "- max_height:  " << gradient_max_height_ << std::endl;
-  std::cout << "- nb_erosions:  " << gradient_nb_erosions_ << std::endl;
-  std::cout << "- low_slope:  " << gradient_low_slope_ << std::endl;
-  std::cout << "- high_slope:  " << gradient_high_slope_ << std::endl;
   std::cout << endl;
 
   // DEPRECATED
@@ -311,16 +287,6 @@ void ROSPublisher::octomapWorker()
             publishOctomap();
             //ROS_INFO("Octomap published");
           }
-          if ( publish_projected_map_ ) {
-            //ROS_INFO("Publishing Projected map...");
-            publishProjectedMap();
-            //ROS_INFO("Projected map published");
-          }
-          if ( publish_gradient_map_ ) {
-            //ROS_INFO("Publishing Gradient map...");
-            publishGradientMap();
-            //ROS_INFO("Gradient map published");
-          }
 
           ROS_INFO("octomapWorker: finished cycle integrating %i pointcloud chunks.", pointcloud_chunks_stashed);
         }
@@ -343,304 +309,6 @@ void ROSPublisher::octomapWorker()
 }
 
 /*
- * Creates a 2D Occupancy Grid from the Octomap.
- */
-void ROSPublisher::octomapCutToOccupancyGrid(const octomap::OcTree& octree, nav_msgs::OccupancyGrid& map, nav_msgs::OccupancyGrid& map_erode, const double minZ_, const double maxZ_ )
-{
-
-    static const uint8_t a = 1;
-    static const uint8_t b = 0;
-    static const uint8_t c = 2;
-
-    map.info.resolution = octree.getResolution();
-    double minX, minY, minZ;
-    double maxX, maxY, maxZ;
-    octree.getMetricMin(minX, minY, minZ);
-    octree.getMetricMax(maxX, maxY, maxZ);
-    ROS_DEBUG("Octree min %f %f %f", minX, minY, minZ);
-    ROS_DEBUG("Octree max %f %f %f", maxX, maxY, maxZ);
-    minZ = std::max(minZ_, minZ);
-    maxZ = std::min(maxZ_, maxZ);
-
-    octomap::point3d minPt(minX, minY, minZ);
-    octomap::point3d maxPt(maxX, maxY, maxZ);
-    octomap::OcTreeKey minKey, maxKey, curKey;
-
-    if (!octree.coordToKeyChecked(minPt, minKey))
-    {
-        ROS_ERROR("Could not create OcTree key at %f %f %f", minPt.x(), minPt.y(), minPt.z());
-        return;
-    }
-    if (!octree.coordToKeyChecked(maxPt, maxKey))
-    {
-        ROS_ERROR("Could not create OcTree key at %f %f %f", maxPt.x(), maxPt.y(), maxPt.z());
-        return;
-    }
-
-    map.info.width = maxKey[b] - minKey[b] + 1;
-    map.info.height = maxKey[a] - minKey[a] + 1;
-
-    // might not exactly be min / max:
-    octomap::point3d origin =   octree.keyToCoord(minKey, octree.getTreeDepth());
-
-    /*
-     * Aligns base_link with origin of map frame, but is not correct in terms of real environment
-     * (real map's origin is in the origin of camera's origin)
-     * map.info.origin.position.x = origin.x() - octree.getResolution() * 0.5 - cam_base_translation_.at<float>(0);
-     * map.info.origin.position.y = origin.y() - octree.getResolution() * 0.5 - cam_base_translation_.at<float>(1);
-     *
-     */
-
-    map.info.origin.position.x = origin.x() - octree.getResolution() * 0.5;
-    map.info.origin.position.y = origin.y() - octree.getResolution() * 0.5;
-
-    map.info.origin.orientation.x = 0.;
-    map.info.origin.orientation.y = 0.;
-    map.info.origin.orientation.z = 0.;
-    map.info.origin.orientation.w = 1.;
-
-    // Allocate space to hold the data
-    map.data.resize(map.info.width * map.info.height, -1);
-
-    // Matrix of map's size is inited with unknown (-1) value at each point
-    for(std::vector<int8_t>::iterator it = map.data.begin(); it != map.data.end(); ++it) {
-       *it = -1;
-    }
-
-    map_erode = map;  // plain copy of one struct - copy needed for second map version
-
-    /*
-     * Matrix for morphological operations
-    ** Matrix's type set to Unsigned Char - additional loop for assigning matrix's
-    ** values to map.data vector is still a must
-    ** Another thing is that morphological operations behave strange with negative values inside a matrix
-    ** It is probably because erode, close and open aren't supposed to deal with negative (-1) values inside matrix
-    */
-
-    // values in the matrix
-    static const unsigned char MAT_UNKNOWN  = 10;
-    static const unsigned char MAT_NON_OCC  = 50;
-    static const unsigned char MAT_OCCUPIED = 100;
-
-    cv::Mat map_data_matrix;
-    map_data_matrix.create(map.info.height, map.info.width, CV_8U); // ensures that the matrix is continuous
-    map_data_matrix.setTo(MAT_UNKNOWN);
-
-    // map creation time
-    ros::Time t_start = ros::Time::now();
-    unsigned i, j;
-    // iterate over all keys:
-    for (curKey[a] = minKey[a], j = 0; curKey[a] <= maxKey[a]; ++curKey[a], ++j)
-    {
-        // pointer to the current row start
-        uchar* mat_ptr = map_data_matrix.ptr<uchar>(j);
-
-        for (curKey[b] = minKey[b], i = 0; curKey[b] <= maxKey[b]; ++curKey[b], ++i)
-        {
-            for (curKey[c] = minKey[c]; curKey[c] <= maxKey[c]; ++curKey[c])
-            {   //iterate over height
-
-                octomap::OcTreeNode* node = octree.search(curKey);
-                if (node)
-                {
-                  // creates map data
-                  bool occupied = octree.isNodeOccupied(node);
-                  if(occupied) {
-
-                      map.data[map.info.width * j + i] = 100;
-                      mat_ptr[i] = MAT_OCCUPIED;
-                      break;
-
-                  } else {
-                      map.data[map.info.width * j + i] = 0;
-                      mat_ptr[i] = MAT_NON_OCC;
-                  }
-                }
-            }
-        }
-    }
-
-    /*
-    ** Application of a morphological operations to map - they clear
-    ** single points that are incorrectly interpreted as occupied
-    */
-
-    if ( projected_morpho_map_pub_.getNumSubscribers() > 0 ) {
-
-      /* ERODE */
-      if ( erode_nb_ > 0 ) {
-        cv::erode(map_data_matrix,
-                  map_data_matrix,
-                  cv::getStructuringElement(cv::MorphShapes::MORPH_RECT,
-                                            cv::Size(erode_se_size_,erode_se_size_),
-                                            cv::Point(-1,-1)),
-                  cv::Point(-1,-1),
-                  erode_nb_,
-                  cv::BORDER_CONSTANT,
-                  cv::morphologyDefaultBorderValue());
-      }
-
-      /* OPEN */
-      if ( open_nb_ > 0 ) {
-        cv::morphologyEx(map_data_matrix,
-                         map_data_matrix,
-                         cv::MORPH_OPEN,
-                         cv::getStructuringElement(cv::MorphShapes::MORPH_RECT, // MORPH_CROSS,
-                                                   cv::Size(open_se_size_,open_se_size_),
-                                                   cv::Point(-1,-1)),
-                         cv::Point(-1,-1),
-                         open_nb_,
-                         cv::BORDER_CONSTANT,
-                         cv::morphologyDefaultBorderValue());
-      }
-
-      /* CLOSE */
-      if ( close_nb_ > 0 ) {
-        cv::morphologyEx(map_data_matrix,
-                         map_data_matrix,
-                         cv::MORPH_CLOSE,
-                         cv::getStructuringElement(cv::MorphShapes::MORPH_RECT, // MORPH_CROSS,
-                                                   cv::Size(close_se_size_,close_se_size_),
-                                                   cv::Point(-1,-1)),
-                         cv::Point(-1,-1),
-                         close_nb_,
-                         cv::BORDER_CONSTANT,
-                         cv::morphologyDefaultBorderValue());
-      }
-
-      /* ERODE */
-      if ( erode2_nb_ > 0 ) {
-        cv::erode(map_data_matrix,
-                  map_data_matrix,
-                  cv::getStructuringElement(cv::MorphShapes::MORPH_ELLIPSE,
-                                            cv::Size(erode2_se_size_,erode2_se_size_),
-                                            cv::Point(-1,-1)),
-                  cv::Point(-1,-1),
-                  erode2_nb_,
-                  cv::BORDER_CONSTANT,
-                  cv::morphologyDefaultBorderValue());
-      }
-
-      // nav_msgs/OccupancyGrid msg out of map after morphological operations
-      for ( int j = 0; j < map_erode.info.height; j++) {
-
-        // pointer to the current row start
-        uchar* mat_ptr = map_data_matrix.ptr<uchar>(j);
-
-        for ( int i = 0; i < map_erode.info.width; i++ ) {
-          switch( mat_ptr[i] )
-          {
-            case MAT_UNKNOWN:
-                map_erode.data[map_erode.info.width * j + i] = -1;
-                break;
-            case MAT_NON_OCC:
-                map_erode.data[map_erode.info.width * j + i] = 0;
-                break;
-            case MAT_OCCUPIED:
-                map_erode.data[map_erode.info.width * j + i] = 100;
-                break;
-          }
-        }
-      }
-    }
-
-    ros::Duration t_stop = (ros::Time::now() - t_start);
-    ROS_INFO("Occupancy grid: %d x %d created in %.3f sec",  map_erode.info.width,
-                                                             map_erode.info.height,
-                                                             t_stop.toSec() );
-}
-
-/*
- * Constructs a 2-dimensional OccupancyGrid from an Octomap by evaluating its heightmap gradients.
- */
-void ROSPublisher::octomapGradientToOccupancyGrid(const octomap::OcTree& octree, nav_msgs::OccupancyGrid& map, float max_height, int nb_erosions, float low_slope, float high_slope)
-{
-    // get tree dimensions
-    double min_x, min_y, min_z;
-    double max_x, max_y, max_z;
-    octree.getMetricMin(min_x, min_y, min_z);
-    octree.getMetricMax(max_x, max_y, max_z);
-    octomap::point3d min_point(min_x, min_y, min_z);
-    octomap::point3d max_point(max_x, max_y, max_z);
-
-    // fill in map dimensions
-    map.info.resolution = octree.getResolution();
-    map.info.width = (max_point.x() - min_point.x()) / map.info.resolution + 1;
-    map.info.height = (max_point.y() - min_point.y()) / map.info.resolution + 1;
-
-    map.info.origin.position.x = min_point.x() - map.info.resolution * 0.5;
-    map.info.origin.position.y = min_point.y() - map.info.resolution * 0.5;
-
-    map.info.origin.orientation.x = 0.;
-    map.info.origin.orientation.y = 0.;
-    map.info.origin.orientation.z = 0.;
-    map.info.origin.orientation.w = 1.;
-
-    // create CV matrix of proper size with 1 channel of 32 bit floats and init values to NaN for "unknown"
-    cv::Mat height_map(map.info.height, map.info.width, CV_32FC1, NAN);
-
-    // iterate over tree leafs to create height map
-    octomap::point3d coord;
-    int x, y;
-    float z;
-    for(octomap::OcTree::leaf_iterator it = octree.begin_leafs(), end=octree.end_leafs(); it != end; ++it)
-    {
-        if (octree.isNodeOccupied(*it))
-        {
-            coord = it.getCoordinate();
-            x = (coord.x() - min_point.x()) / map.info.resolution;
-            y = (coord.y() - min_point.y()) / map.info.resolution;
-            z = coord.z(); // z-axis is facing UP
-            if (z <= max_height) // only consider voxels up to specified height (e.g. for building indoor maps)
-            {
-                float current_height = height_map.at<float>(y, x);
-                if (current_height != current_height || z > current_height)
-                {
-                    height_map.at<float>(y, x) = z;
-                }
-            }
-        }
-    }
-
-    // fill in small holes
-    PublisherUtils::erodeNaN(height_map, nb_erosions);
-    // store where height is unknown
-    cv::Mat mask_unknown = height_map != height_map; // is NaN
-
-    PublisherUtils::erodeNaN(height_map, 1); // avoid discontinuity (and thus a "wall") around known area
-
-    height_map.setTo(0, height_map != height_map); // get rid of all NaN trouble makers
-
-    // get height gradient
-    cv::Mat gradient_x, gradient_y, gradient_map;
-    cv::Scharr(height_map, gradient_x, CV_32F, 1, 0, 1. / 16.);
-    cv::Scharr(height_map, gradient_y, CV_32F, 0, 1, 1. / 16.);
-    cv::addWeighted(cv::abs(gradient_x), 0.5, cv::abs(gradient_y), 0.5, 0, gradient_map); // TODO 0.5 rly?
-
-    // height slope thresholds:
-    // values < lower are considered free space
-    // values > upper are considered obstacle
-    // everything inbetween is literally a gray-zone
-    float threshold_lower = sin(low_slope) / cos(low_slope) * map.info.resolution;
-    float threshold_upper = sin(high_slope) / cos(high_slope) * map.info.resolution;
-
-    // map data probabilities are in range [0,100].  Unknown is -1.
-    gradient_map.setTo(threshold_upper, gradient_map > threshold_upper); // clip obstacles
-    gradient_map.setTo(threshold_lower, gradient_map < threshold_lower); // clip free space
-    gradient_map = (gradient_map - threshold_lower) / (threshold_upper - threshold_lower) * 100.0; // convert into map data range
-    gradient_map.setTo(-1, mask_unknown); //replace NaNs
-
-    // ensure correct size of map data vector
-    map.data.resize(map.info.width * map.info.height);
-    // fill in map data
-    for(y = 0; y < gradient_map.rows; ++y) {
-        for(x = 0; x < gradient_map.cols; ++x) {
-            map.data[y * map.info.width + x] = gradient_map.at<float>(y, x);
-        }
-    }
-}
-
-/*
  * Publishes Ladybug_SLAM GetAllMapPoints() as a PointCloud2.
  */
 void ROSPublisher::publishMap()
@@ -648,7 +316,6 @@ void ROSPublisher::publishMap()
     sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(GetMap()->GetAllMapPoints());
     msg.header.frame_id = map_frame_;
     map_pub_.publish(msg);
-    ROS_INFO("publishMap()");
 }
 
 /*
@@ -710,18 +377,7 @@ void ROSPublisher::publishOctomap()
     auto t0 = std::chrono::system_clock::now();
     octomap_msgs::Octomap msgOctomap;
     msgOctomap.header.frame_id = map_frame_;
-    /* TODO: add as a parameter
-    if ( adjust_map_frame_ ) {
 
-      msgOctomap.header.frame_id =  octomap_tf_based_ ?
-                                            map_frame_adjusted_ :
-                                            map_frame_;
-
-      msgOctomap.header.frame_id = octomap_frame_;
-    } else {
-      msgOctomap.header.frame_id =  map_frame_;
-    }
-    */
     msgOctomap.header.stamp = ros::Time::now();
     if (octomap_msgs::binaryMapToMsg(octomap_, msgOctomap))   // TODO: full/binary...?
     {
@@ -761,75 +417,6 @@ void ROSPublisher::publishState(Tracking *tracking)
         state_desc_pub_.publish(state_desc_msg);
 
         // last_state_publish_time_ = ros::Time::now();
-    }
-}
-
-/*
- * Creates a 2D OccupancyGrid from the Octomap by performing a cut through a previously specified z interval and publishes it.
- */
-void ROSPublisher::publishProjectedMap()
-{
-
-    static nav_msgs::OccupancyGrid msg;
-    static nav_msgs::OccupancyGrid msg_eroded;
-
-    msg.header.frame_id = map_frame_;
-    msg_eroded.header.frame_id = map_frame_;
-    /*
-    if ( adjust_map_frame_ ) {
-
-      msg.header.frame_id =  octomap_tf_based_ ?
-                                            map_frame_adjusted_ :
-                                            map_frame_;
-
-      msg.header.frame_id = octomap_frame_; == map
-      msg_eroded.header.frame_id = octomap_frame_;
-    } else {
-      msg.header.frame_id =  map_frame_;
-      msg_eroded.header.frame_id =  map_frame_;
-    }
-    */
-    msg.header.stamp = ros::Time::now();
-    msg_eroded.header.stamp = ros::Time::now();
-
-    octomapCutToOccupancyGrid(octomap_, msg, msg_eroded, projection_min_height_, projection_max_height_);
-
-    // one of maps published
-    projected_map_pub_.publish(msg);
-    
-    // projected_morpho_map_pub_.publish(msg_eroded);
-    
-}
-
-/*
- * Creates a 2D OccupancyGrid from the Octomap by evaluating its heightmap gradients and publishes it.
- */
-void ROSPublisher::publishGradientMap()
-{
-
-    if (gradient_map_pub_.getNumSubscribers() > 0)
-    {
-        static nav_msgs::OccupancyGrid msg;
-        msg.header.frame_id = map_frame_;
-        /*
-        if ( adjust_map_frame_ ) {
-
-          msg.header.frame_id =  octomap_tf_based_ ?
-                                                map_frame_adjusted_ :
-                                                map_frame_;
-
-          msg.header.frame_id = octomap_frame_; == map
-        } else {
-          msg.header.frame_id =  map_frame_;
-        }
-        */
-        msg.header.stamp = ros::Time::now();
-
-        octomapGradientToOccupancyGrid(octomap_, msg,
-                                       gradient_max_height_, gradient_nb_erosions_,
-                                       gradient_low_slope_,  gradient_high_slope_);
-
-        gradient_map_pub_.publish(msg);
     }
 }
 
@@ -882,6 +469,7 @@ void ROSPublisher::SemiDenseUpdater() {
   std::chrono::system_clock::time_point a = std::chrono::system_clock::now();
   std::chrono::system_clock::time_point b = std::chrono::system_clock::now();
 
+  Map* map = GetMap();
   ROS_WARN("SemiDenseUpdater started");
   while (GetSystem() != nullptr && !GetSystem()->isFinished()) {
 
@@ -899,15 +487,18 @@ void ROSPublisher::SemiDenseUpdater() {
         b = std::chrono::system_clock::now();
         std::chrono::duration<double, std::milli> sleep_time = b - a;
 
-      Map* map = GetMap();
       if(map == nullptr)
           break;
-          
-      sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(map->GetMergedMapPoints(),
-                                                                    map_scale_,
-                                                                    camera_height_corrected_);
-      msg.header.frame_id = map_frame_;
-      map_pub_.publish(msg);
+
+
+      vector<Ladybug_SLAM::MapPoint*> points = map->GetAllMapSemiDensePoints();
+
+      if(points.size() > 0){
+          ROS_WARN("SemiDenseUpdater update");
+          sensor_msgs::PointCloud2 msg = PublisherUtils::convertToPCL2(points);
+          msg.header.frame_id = map_frame_;
+          map_pub_.publish(msg);
+      }
     
   }
   ROS_WARN("SemiDenseUpdater finished");
@@ -922,64 +513,6 @@ void ROSPublisher::Run()
     using namespace std::chrono;
 
     ROS_INFO("ROS publisher started");
-
-    /*
-    if ( perform_scale_correction_) {
-
-      bool scale_correction = false; // flag to check state at the end
-      ScaleCorrector scale_corrector(scaling_distance_);
-      ROS_INFO("Waiting for initialization...");
-      while ( GetSystem()->GetTrackingState() <= Ladybug_SLAM::Tracking::NOT_INITIALIZED ) {
-
-        if ( isStopRequested() ) {
-          Stop();
-          GetSystem()->Shutdown();
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      }
-
-      ROS_WARN("Starting the map scale correction procedure...");
-
-      while ( !scale_corrector.isScaleUpdated() ) {
-        scale_correction = true;
-        // TODO: freezes when trying to shutdown here
-        cv::Mat xf = PublisherUtils::computeCameraTransform(GetCameraPose());
-        if ( !scale_corrector.gotCamPosition() ) {
-          scale_corrector.setCameraStartingPoint(xf.at<float>(0, 3),
-                                                 xf.at<float>(1, 3),
-                                                 xf.at<float>(2, 3));
-        }
-
-        if ( scale_corrector.isReady() ) {
-          scale_corrector.calculateScale(xf.at<float>(0, 3),
-                                         xf.at<float>(1, 3),
-                                         xf.at<float>(2, 3));
-        }
-        if ( isStopRequested() ) {
-          Stop();
-          scale_correction = false;
-          // GetSystem()->Shutdown();
-          ROS_WARN("Scale correction procedure must be stopped");
-        }
-        if ( GetSystem()->GetTrackingState() == Ladybug_SLAM::Tracking::LOST ) {
-          ROS_WARN("Scale correction procedure couldn't be fully performed - tracking lost. Try to re-initialize");
-          scale_correction = false;
-          break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-      }
-
-      if ( scale_correction ) {
-        map_scale_ = scale_corrector.getScale();
-        ROS_INFO("Map scale corrected!");
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // just to check scale
-      }
-
-    }
-
-    ROS_WARN("Finished the map scale correction procedure...");
-    */
 
     if (octomap_enabled_) {
       ROS_WARN("octomap_worker_thread_ started...");
@@ -997,7 +530,6 @@ void ROSPublisher::Run()
 
         // only publish map, map updates and camera pose, if camera pose was updated
         if (isCamUpdated()) {
-            ROS_WARN("isCamUpdated()");
 
             static ros::Time last_camera_update;
             last_camera_update = ros::Time::now();
@@ -1022,7 +554,6 @@ void ROSPublisher::Run()
             
             if (octomap_enabled_)
             {
-              ROS_WARN("octomap_enabled_");
               // stashMapPoints(); // store current reference map points for the octomap worker
               stashMapPoints(false);
             }
@@ -1058,7 +589,6 @@ void ROSPublisher::Update(Tracking *tracking)
         return;
     publishState(tracking);
 
-    ROS_INFO("publishImage");
     publishImage();
 }
 
