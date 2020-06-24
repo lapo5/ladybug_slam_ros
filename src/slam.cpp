@@ -68,7 +68,7 @@ public:
   SLAM_Monitor(Ladybug_SLAM::System* slam_ptr, ROSPublisher* octmap_publisher_ptr)
   {
     // Subscrive to input video feed and publish output video feed
-    image_sub_ = nh_.subscribe("/pano_image", 10, &SLAM_Monitor::backCB, this);
+    image_sub_ = nh_.subscribe("/ladybug/pano_image", 10, &SLAM_Monitor::backCB, this);
 
     SLAM = slam_ptr;
     octmap_publisher = octmap_publisher_ptr;
