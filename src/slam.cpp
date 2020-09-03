@@ -141,7 +141,12 @@ int main(int argc, char **argv)
   nh.param<bool>("use_semi_dense_reconstruction",  use_semi_dense_reconstruction_, true);
   nh.param<bool>("use_debug",  use_debug_, true);
 
-  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, use_semi_dense_reconstruction_, ORB_FEATURE_MATCHER, use_debug_);
+  bool send_over_udp=true;
+  std::string destination_ip="192.168.17.121";
+  short unsigned int udp_port=8205;
+
+  Ladybug_SLAM::System SLAM(orb_voc_path,yaml_path, LBG, use_semi_dense_reconstruction_, 
+        ORB_FEATURE_MATCHER, use_debug_, send_over_udp, destination_ip, udp_port);
 
   SLAM.Start();
 
