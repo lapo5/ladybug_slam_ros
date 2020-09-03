@@ -37,16 +37,16 @@ using namespace ros;
 using namespace Ladybug_SLAM;
 
 
-string strInnFilePath="/CalibrationResult/InnPara.txt";
-string strExFilePath="/CalibrationResult/ExPara.txt";
-string strInvInnFilePath="/CalibrationResult/InvInnPara.txt";
+string strInnFilePath="InnPara.txt";
+string strExFilePath="ExPara.txt";
+string strInvInnFilePath="InvInnPara.txt";
 
 static const std::string OPENCV_WINDOW = "Image window";
 
 static const int ImgWidth = 1232;
 static const int ImgHeight = 1616;
 
-string dataset_path = "/home/marco/Desktop/KASHIWA/";
+string camera_conf_path = "/home/marco/Ladybug_SLAM_ws/src/ladybug_slam_lib/CalibrationResult/";
 string orb_voc_path = "/home/marco/Desktop/Ladybug_SLAM_ws/src/ladybug_slam_lib/Vocabulary/ORBvoc.bin";
 string yaml_path = "/home/marco/Desktop/Ladybug_SLAM_ws/src/ladybug_slam_lib/Ladybug/Ladybug_SLAM.yaml";
 
@@ -127,8 +127,11 @@ int main(int argc, char **argv)
 
   cout<<"Reading the Inner Para and the Extern Para..."<<endl;
   LBG.InputSphereRadius(20);
-  if(!LBG.ReadInnerParaFromFile(dataset_path+strInnFilePath) || !LBG.ReadInvInnerParaFromFile(dataset_path+strInvInnFilePath) || !LBG.ReadUnitCameraExParaFromFile(dataset_path+strExFilePath)){
-      ROS_ERROR("Error Reading parameters from Images Folder");
+  if(!LBG.ReadInnerParaFromFile(camera_conf_path+strInnFilePath) || 
+      !LBG.ReadInvInnerParaFromFile(camera_conf_path+strInvInnFilePath) || 
+        !LBG.ReadUnitCameraExParaFromFile(camera_conf_path+strExFilePath)){
+
+          ROS_ERROR("Error Reading parameters from Images Folder");
   }
 
   cv::Rect rect(0,0,1232,1200);
