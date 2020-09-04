@@ -1,0 +1,15 @@
+<launch>
+	<node pkg="ladybug_slam" type="tf_broadcaster" name="tf_broadcaster_node">
+    </node>
+    
+	<node pkg="filter_image" type="filter" name="filter_image_node">
+    </node>
+
+	<node pkg="aggregate_images" type="aggregator" name="aggregator_node">
+    </node>
+
+	<node pkg="log_images" type="logger" name="logger_node">
+    </node>
+
+</launch>
+	

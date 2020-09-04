@@ -1,0 +1,10 @@
+<launch>
+	<node pkg="ladybug_slam" type="slam" name="ladybug_slam">
+        <param name="use_semi_dense_reconstruction" value="false" />
+        <param name="use_debug" value="true" />
+        <param name="send_over_udp" value="true" />
+        <param name="destination_ip" value="192.168.17.121" />
+        <param name="udp_port" value="8205" />
+    </node>
+</launch>
+	
