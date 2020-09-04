@@ -1,10 +1,22 @@
 <launch>
 	<node pkg="ladybug_slam" type="slam" name="ladybug_slam">
-        <param name="use_semi_dense_reconstruction" value="true" />
+        <param name="use_semi_dense_reconstruction" value="false" />
         <param name="use_debug" value="true" />
+        <param name="send_over_udp" value="false" />
+        <param name="destination_ip" value="192.168.17.121" />
+        <param name="udp_port" value="8205" />
     </node>
 
 	<node pkg="ladybug_slam" type="tf_broadcaster" name="tf_broadcaster_node">
+    </node>
+
+	<node pkg="filter_image" type="filter" name="filter_image_node">
+    </node>
+
+	<node pkg="aggregate_images" type="aggregator" name="aggregator_node">
+    </node>
+
+	<node pkg="log_images" type="logger" name="logger_node">
     </node>
 
 </launch>
